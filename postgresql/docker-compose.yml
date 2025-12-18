@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  postgres-primary:
+    image: postgres:15.2-alpine
+    container_name: cgraph-db-primary
+    environment:
+      POSTGRES_USER: cgraph
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-securepwd123!}
+      POSTGRES_DB: cgraph
+      POSTGRES_INITDB_ARGS: "-c max_connections=200 -c shared_buffers=256MB -c effective_cache_size=1GB -c maintenance_work_mem=64MB -c checkpoint_completion_target=0.9 -c wal_buffers=16MB -c default_statistics_target=100 -c random_page_cost=1.1 -c effective_io_concurrency=200 -c work_mem=4MB -c min_wal_size=4GB -c max_wal_size=16GB -c max_worker_processes=4 -c max_parallel_workers_per_gather=2 -c max_parallel_workers=4"
+      POSTGRES_REPLICATION_MODE: master
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replication123!}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data:/var/lib/postgresql/data
+      - ./init-replica.sql:/docker-entrypoint-initdb.d/01-init-replica.sql
+    networks:
+      - cgraph
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cgraph"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  postgres-replica:
+    image: postgres:15.2-alpine
+    container_name: cgraph-db-replica
+    environment:
+      POSTGRES_USER: cgraph
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-securepwd123!}
+      POSTGRES_REPLICATION_MODE: slave
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replication123!}
+      PGUSER: replicator
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./replica_data:/var/lib/postgresql/data
+    networks:
+      - cgraph
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cgraph -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    command: |
+      bash -c "
+      if [ ! -f /var/lib/postgresql/data/PG_VERSION ]; then
+        pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U replicator -v -P -W
+      fi
+      exec postgres -c server_encoding=UTF8
+      "
+
+networks:
+  cgraph:
+    driver: bridge

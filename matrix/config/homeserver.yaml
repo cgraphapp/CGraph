@@ -1,0 +1,64 @@
+
+database:
+  name: psycopg2
+  args:
+    user: synapse
+    password: synapsepwd123!
+    database: synapse
+    host: synapse-db
+    port: 5432
+    cp_min: 5
+    cp_max: 25
+
+listeners:
+  - port: 8008
+    type: http
+    x_forwarded: true
+    bind_addresses: ['0.0.0.0']
+    resources:
+      - names: [client, federation]
+        compress: true
+
+  - port: 8448
+    type: http
+    tls: true
+    x_forwarded: false
+    bind_addresses: ['0.0.0.0']
+    resources:
+      - names: [client, federation]
+        compress: true
+
+tls_certificate_path: "/data/cgraph.org.crt"
+tls_private_key_path: "/data/cgraph.org.key"
+
+database:
+  name: psycopg2
+  args:
+    user: synapse
+    password: synapsepwd123!
+    database: synapse
+    host: synapse-db
+    port: 5432
+    cp_min: 5
+    cp_max: 25
+
+listeners:
+  - port: 8008
+    type: http
+    x_forwarded: true
+    bind_addresses: ['0.0.0.0']
+    resources:
+      - names: [client, federation]
+        compress: true
+
+  - port: 8448
+    type: http
+    tls: true
+    x_forwarded: false
+    bind_addresses: ['0.0.0.0']
+    resources:
+      - names: [client, federation]
+        compress: true
+
+tls_certificate_path: "/data/cgraph.org.crt"
+tls_private_key_path: "/data/cgraph.org.key"

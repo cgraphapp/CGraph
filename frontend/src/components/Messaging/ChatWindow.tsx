@@ -8,19 +8,23 @@ interface Message {
   author_name: string;
   content: string;
   created_at: string;
+  reactions: string[];
 }
 
 interface ChatWindowProps {
   roomId: string;
   roomName: string;
+  isGroup?: boolean;
 }
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, roomName }) => {
+export const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, roomName, isGroup }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [typing, setTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Fetch messages
   useEffect(() => {
     const fetchMessages = async () => {
       try {
@@ -29,15 +33,38 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, roomName }) => {
         });
         const data = await response.json();
         setMessages(data.messages || []);
+        scrollToBottom();
       } catch (error) {
         toast.error('Failed to load messages');
       }
     };
 
     fetchMessages();
-    const interval = setInterval(fetchMessages, 2000);
+    const interval = setInterval(fetchMessages, 2000); // Poll for new messages
     return () => clearInterval(interval);
   }, [roomId]);
+
+  // WebSocket connection for real-time
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    const ws = new WebSocket(
+      `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/${roomId}?token=${token}`
+    );
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'message') {
+        setMessages((prev) => [...prev, data.message]);
+        scrollToBottom();
+      }
+    };
+
+    return () => ws.close();
+  }, [roomId]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +81,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, roomName }) => {
         body: JSON.stringify({ content: newMessage }),
       });
 
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok) throw new Error('Failed to send message');
+
       setNewMessage('');
       toast.success('Message sent');
     } catch (error) {
@@ -66,10 +94,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, roomName }) => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 p-4">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 p-4 shadow-sm">
         <h2 className="text-xl font-bold text-gray-900">{roomName}</h2>
+        {typing && <p className="text-sm text-gray-500">Someone is typing...</p>}
       </div>
 
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg) => (
           <div key={msg.id} className="flex gap-3">
@@ -90,6 +121,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, roomName }) => {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Input */}
       <form onSubmit={handleSendMessage} className="bg-white border-t border-gray-200 p-4">
         <div className="flex gap-3">
           <input
@@ -99,7 +131,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, roomName }) => {
             placeholder="Type a message..."
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           />
-          <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-2 px-6 rounded-lg transition"
+          >
             Send
           </button>
         </div>
@@ -107,3 +143,4 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, roomName }) => {
     </div>
   );
 };
+

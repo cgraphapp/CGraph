@@ -5,6 +5,7 @@ interface Forum {
   id: string;
   name: string;
   description: string;
+  category: string;
   total_posts: number;
   total_members: number;
 }
@@ -39,16 +40,19 @@ export const ForumList: React.FC = () => {
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {forums.map((forum) => (
-          <div key={forum.id} className="bg-white rounded-lg shadow-md hover:shadow-lg p-6">
+          <div key={forum.id} className="bg-white rounded-lg shadow-md hover:shadow-lg transition p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-2">{forum.name}</h2>
             <p className="text-gray-600 mb-4">{forum.description}</p>
             
-            <div className="flex justify-between text-sm text-gray-500 mb-4">
-              <span>�� {forum.total_posts} posts</span>
+            <div className="flex justify-between text-sm text-gray-500">
+              <span>📝 {forum.total_posts} posts</span>
               <span>👥 {forum.total_members} members</span>
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                {forum.category}
+              </span>
             </div>
             
-            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
+            <button className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">
               Enter Forum
             </button>
           </div>
@@ -57,3 +61,4 @@ export const ForumList: React.FC = () => {
     </div>
   );
 };
+

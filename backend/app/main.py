@@ -1,99 +1,110 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
+from app.config import settings
+from app.database import engine, Base, get_db
+from app.api.v1 import auth, messages, rooms, forums, payments, cosmetics
+from app.middleware.rate_limiting import RateLimitMiddleware
+from app.middleware.error_handler import ErrorHandlerMiddleware
+import structlog
 
-from app.database import init_db, get_db, engine
-from app.cache import cache
-from app.routes import auth, messages, forums
+# Setup logging
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
 
-# Logging setup
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
-# Startup/Shutdown events
+# Create tables
+Base.metadata.create_all(bind=engine)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("Starting CGRAPH backend...")
-    await init_db()
-    await cache.connect()
-    logger.info("✅ Services initialized")
-    
+    logger.info("🚀 CGRAPH Backend Starting...")
     yield
-    
     # Shutdown
-    logger.info("Shutting down CGRAPH backend...")
-    await cache.disconnect()
-    await engine.dispose()
-    logger.info("✅ Services stopped")
+    logger.info("💤 CGRAPH Backend Shutting Down...")
 
-# Create FastAPI app
+# Initialize FastAPI
 app = FastAPI(
     title="CGRAPH API",
-    description="Private messaging and forums platform",
+    description="Complete Graph Communication Platform",
     version="7.0.0",
-    lifespan=lifespan,
+    lifespan=lifespan
 )
 
-# Middleware - Security headers
-@app.middleware("http")
-async def add_security_headers(request, call_next):
-    response = await call_next(request)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    return response
-
-# CORS configuration
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://cgraph.org", "https://www.cgraph.org"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allow_methods=["*"],
     allow_headers=["*"],
-    max_age=3600,
 )
 
-# Trusted host middleware
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["cgraph.org", "*.cgraph.org", "localhost"],
-)
+# Rate Limiting Middleware
+app.add_middleware(RateLimitMiddleware)
 
-# Health check endpoint
+# Error Handler Middleware
+app.add_middleware(ErrorHandlerMiddleware)
+
+# Health Check Endpoint
 @app.get("/health")
 async def health_check():
     return {
         "status": "healthy",
         "version": "7.0.0",
-        "service": "cgraph-backend"
+        "environment": settings.ENVIRONMENT
     }
 
-# API Routes
-app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
-app.include_router(messages.router, prefix="/api/v1", tags=["Messages"])
-app.include_router(forums.router, prefix="/api/v1", tags=["Forums"])
+# API Routes v1
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(messages.router, prefix="/api/v1/messages", tags=["Messages"])
+app.include_router(rooms.router, prefix="/api/v1/rooms", tags=["Rooms"])
+app.include_router(forums.router, prefix="/api/v1/forums", tags=["Forums"])
+app.include_router(payments.router, prefix="/api/v1/payments", tags=["Payments"])
+app.include_router(cosmetics.router, prefix="/api/v1/cosmetics", tags=["Cosmetics"])
 
-# Error handlers
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    logger.error(f"Unhandled exception: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"}
-    )
+# Root endpoint
+@app.get("/")
+async def root():
+    return {
+        "name": "CGRAPH",
+        "version": "7.0.0",
+        "status": "running",
+        "docs": "/docs",
+        "api": "/api/v1"
+    }
+
+# Metrics endpoint (Prometheus)
+@app.get("/metrics")
+async def metrics():
+    from prometheus_client import generate_latest
+    return generate_latest()
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        app,
+        "app.main:app",
         host="0.0.0.0",
-        port=8001,
-        workers=4,
-        loop="uvloop",
+        port=8000,
+        reload=settings.DEBUG,
+        log_level="info"
     )
+

@@ -1,0 +1,35 @@
+server_name: "cgraph.org"
+report_stats: true
+
+database:
+  name: psycopg2
+  args:
+    user: synapse
+    password: "1994Lks!Oliver2017."
+    database: synapse
+    host: postgres
+    port: 5432
+    cp_min: 5
+    cp_max: 10
+
+redis:
+  enabled: true
+  host: redis
+  port: 6379
+
+listeners:
+  - port: 8008
+    tls: false
+    type: http
+    x_forwarded: true
+    bind_addresses: ['0.0.0.0']
+    resources:
+      - names: [client, federation]
+
+media_store_path: /data/media_store
+uploads_path: /data/uploads
+
+enable_registration: false
+registration_requires_token: true
+
+log_config: /data/cgraph.org.log.config

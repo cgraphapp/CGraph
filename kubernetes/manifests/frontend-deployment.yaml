@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cgraph-frontend
+  namespace: cgraph
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cgraph-frontend
+  template:
+    metadata:
+      labels:
+        app: cgraph-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: cgraph/frontend:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 80
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cgraph-frontend
+  namespace: cgraph
+spec:
+  type: LoadBalancer
+  selector:
+    app: cgraph-frontend
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP

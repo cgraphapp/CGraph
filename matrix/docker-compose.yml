@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: matrix-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matrix_synapse
+      POSTGRES_USER: cgraph
+      POSTGRES_PASSWORD: "1994Lks!Oliver2017."
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cgraph -d matrix_synapse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - matrix-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: matrix-redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - ./redis-data:/data
+    networks:
+      - matrix-net
+
+  synapse:
+    image: python:3.11-slim
+    container_name: matrix-synapse
+    restart: unless-stopped
+    # Use exec form for command to avoid shell parsing issues
+    command: [
+      "bash", "-c",
+      "pip install matrix-synapse[postgres] psycopg2-binary --no-cache-dir && \
+       if [ ! -f /data/homeserver.yaml ]; then \
+         python -m synapse.app.homeserver \
+           --server-name cgraph.org \
+           --config-path /data/homeserver.yaml \
+           --generate-config \
+           --report-stats=yes \
+           --postgres-config \
+           host=postgres \
+           user=cgraph \
+           password='1994Lks!Oliver2017.' \
+           database=matrix_synapse; \
+       fi && \
+       python -m synapse.app.homeserver --config-path /data/homeserver.yaml"
+    ]
+    environment:
+      - SYNAPSE_SERVER_NAME=cgraph.org
+      - SYNAPSE_REPORT_STATS=yes
+      - SYNAPSE_CONFIG_PATH=/data/homeserver.yaml
+    ports:
+      - "8008:8008"
+    volumes:
+      - ./synapse-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - matrix-net
+
+networks:
+  matrix-net:
+    driver: bridge

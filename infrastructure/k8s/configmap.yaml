@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cgraph-config
+  namespace: cgraph
+data:
+  ENVIRONMENT: production
+  DEBUG: "false"
+  ALLOWED_ORIGINS: "https://cgraph.org"
+  LOG_LEVEL: info

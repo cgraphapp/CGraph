@@ -1,0 +1,42 @@
+FROM python:3.11-slim
+
+# Install all dependencies
+RUN apt-get update && \
+    apt-get install -y \
+    gcc \
+    libpq-dev \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Synapse and dependencies
+RUN pip install --upgrade pip && \
+    pip install 'matrix-synapse<1.144' psycopg2-binary --no-cache-dir
+
+# Create entrypoint script
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
+CMD ["/start.sh"]
+EOF
+
+# Create startup script
+cat > /opt/cgraph/matrix/start.sh << 'EOF'
+#!/bin/bash
+set -e
+
+if [ ! -f /data/homeserver.yaml ]; then
+  echo "Generating config..."
+  python -m synapse.app.homeserver \
+    --server-name cgraph.org \
+    --config-path /data/homeserver.yaml \
+    --generate-config \
+    --report-stats=yes \
+    --postgres-config \
+    host=postgres \
+    user=cgraph \
+    password='1994Lks!Oliver2017.' \
+    database=matrix_synapse
+fi
+
+echo "Starting Synapse..."
+exec python -m

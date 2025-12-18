@@ -1,0 +1,62 @@
+# Environment
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.egg-info/
+venv/
+backend/venv/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+out/
+*.log
+logs/
+
+# Database files
+matrix/postgres-data/
+matrix/redis-data/
+*.db
+*.sqlite3
+*.rdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.project
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker
+docker-compose.override.yml
+get-docker.sh
+
+# SSL/TLS
+*.pem
+*.key
+*.crt
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Coverage
+coverage/
+*.lcov
+
+# Misc
+.dockerignore
+dump.rdb

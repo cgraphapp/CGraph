@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cgraph-backend
+  namespace: cgraph
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cgraph-backend
+  template:
+    metadata:
+      labels:
+        app: cgraph-backend
+    spec:
+      containers:
+      - name: backend
+        image: cgraph/backend:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8001
+        env:
+        - name: DATABASE_URL
+          value: postgresql://cgraph:cgraph_dev@postgres:5432/cgraph
+        - name: REDIS_URL
+          value: redis://redis:6379
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8001
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cgraph-backend
+  namespace: cgraph
+spec:
+  type: ClusterIP
+  selector:
+    app: cgraph-backend
+  ports:
+  - port: 8001
+    targetPort: 8001
+    protocol: TCP

@@ -1,47 +1,65 @@
-"""Database configuration and session management"""
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.pool import NullPool
+from sqlalchemy import event
+import os
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from app.config import settings
-import logging
-
-logger = logging.getLogger(__name__)
+DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL_REPLICA = os.getenv("DATABASE_URL_REPLICA")
 
 # Create async engine
 engine = create_async_engine(
-    settings.database_url,
-    echo=settings.database_echo,
+    DATABASE_URL,
+    echo=False,
+    future=True,
     pool_size=20,
     max_overflow=10,
     pool_pre_ping=True,
-    future=True
+    pool_recycle=3600,
+    connect_args={"timeout": 30, "server_settings": {"application_name": "cgraph"}},
+)
+
+# Read replica engine
+replica_engine = create_async_engine(
+    DATABASE_URL_REPLICA,
+    echo=False,
+    future=True,
+    pool_size=20,
+    max_overflow=10,
+    pool_pre_ping=True,
+    connect_args={"timeout": 30},
 )
 
 # Session factory
-async_session = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False
+AsyncSessionLocal = sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False, future=True
 )
 
-async def get_db():
-    """Get database session"""
-    async with async_session() as session:
+# Replica session
+AsyncSessionReplica = sessionmaker(
+    replica_engine, class_=AsyncSession, expire_on_commit=False, future=True
+)
+
+# Base class for models
+Base = declarative_base()
+
+async def init_db():
+    """Initialize database tables"""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+async def get_db() -> AsyncSession:
+    """Dependency for getting database session"""
+    async with AsyncSessionLocal() as session:
         try:
             yield session
-        except Exception as e:
-            await session.rollback()
-            logger.error(f"Database error: {str(e)}")
-            raise
         finally:
             await session.close()
 
-async def init_db():
-    """Initialize database"""
-    from app.models.user import Base as UserBase
-    from app.models.message import Base as MessageBase
-    
-    async with engine.begin() as conn:
-        await conn.run_sync(UserBase.metadata.create_all)
-        await conn.run_sync(MessageBase.metadata.create_all)
-    
-    logger.info("✅ Database initialized")
+async def get_db_replica() -> AsyncSession:
+    """Dependency for read-only queries"""
+    async with AsyncSessionReplica() as session:
+        try:
+            yield session
+        finally:
+            await session.close()

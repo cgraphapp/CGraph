@@ -1,59 +1,99 @@
-"""CGRAPH FastAPI Application"""
-
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 
-# Import routes
-from app.api.v1 import health, auth, messages
+from app.database import init_db, get_db, engine
+from app.cache import cache
+from app.routes import auth, messages, forums
 
+# Logging setup
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Startup/Shutdown events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifecycle management"""
-    logger.info("🚀 CGRAPH Backend initializing...")
+    # Startup
+    logger.info("Starting CGRAPH backend...")
+    await init_db()
+    await cache.connect()
+    logger.info("✅ Services initialized")
+    
     yield
-    logger.info("🛑 CGRAPH Backend shutting down...")
+    
+    # Shutdown
+    logger.info("Shutting down CGRAPH backend...")
+    await cache.disconnect()
+    await engine.dispose()
+    logger.info("✅ Services stopped")
 
+# Create FastAPI app
 app = FastAPI(
     title="CGRAPH API",
-    description="Private messaging and community forums",
-    version="3.0.0",
-    lifespan=lifespan
+    description="Private messaging and forums platform",
+    version="7.0.0",
+    lifespan=lifespan,
 )
 
-# Middleware
+# Middleware - Security headers
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://www.cgraph.org", "https://cgraph.org", "http://localhost:3000"],
+    allow_origins=["https://cgraph.org", "https://www.cgraph.org"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
     allow_headers=["*"],
+    max_age=3600,
 )
 
+# Trusted host middleware
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["cgraph.org", "*.cgraph.org", "localhost"]
+    allowed_hosts=["cgraph.org", "*.cgraph.org", "localhost"],
 )
 
-# Routes
-app.include_router(health.router)
-app.include_router(auth.router, prefix="/api/v1")
-app.include_router(messages.router, prefix="/api/v1")
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "version": "7.0.0",
+        "service": "cgraph-backend"
+    }
 
-@app.get("/")
-async def root():
-    return {"app": "CGRAPH", "version": "3.0.0", "status": "running"}
+# API Routes
+app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
+app.include_router(messages.router, prefix="/api/v1", tags=["Messages"])
+app.include_router(forums.router, prefix="/api/v1", tags=["Forums"])
+
+# Error handlers
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled exception: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "app.main:app",
+        app,
         host="0.0.0.0",
         port=8001,
-        reload=True,
-        log_level="info"
+        workers=4,
+        loop="uvloop",
     )

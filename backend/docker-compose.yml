@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  app1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cgraph-backend-1
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cgraph:securepwd123!@postgres-primary:5432/cgraph
+      REDIS_URL: redis://:redis123!@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      ENV: production
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    networks:
+      - cgraph
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  app2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cgraph-backend-2
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cgraph:securepwd123!@postgres-primary:5432/cgraph
+      REDIS_URL: redis://:redis123!@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      ENV: production
+    ports:
+      - "8002:8001"
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    networks:
+      - cgraph
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  app3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cgraph-backend-3
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cgraph:securepwd123!@postgres-primary:5432/cgraph
+      REDIS_URL: redis://:redis123!@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      ENV: production
+    ports:
+      - "8003:8001"
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    networks:
+      - cgraph
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  cgraph:
+    driver: bridge
+    external: true
